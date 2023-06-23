@@ -1,0 +1,194 @@
+name: Deploy CPJ
+run-name: Deploy ${{ inputs.labName }}
+on:
+  workflow_dispatch:
+    inputs:
+      labName:
+        description: Labname
+        required: true
+        type: string
+
+      numberOfParticipants:
+        description: Number of participants
+        required: true
+        type: number
+
+      nodeCount:
+        description: Nodecount
+        required: true
+        type: string
+
+env:
+  TF_VAR_clientid: ${{ secrets.ARM_CLIENT_ID }}
+  TF_VAR_clientsecret: ${{ secrets.ARM_CLIENT_SECRET }}
+  TF_VAR_location: ${{ vars.LOCATION }}
+  TF_VAR_aksVersion: ${{ vars.AKSVERSION }}
+  TF_VAR_dnsZone: ${{ vars.DNSZONE }}
+  TF_VAR_labname: ${{ github.event.inputs.labName }}
+  TF_VAR_labNumberParticipants: ${{ github.event.inputs.numberOfParticipants }}
+  TF_VAR_vmUserName: ${{ vars.VMUSERNAME }}
+  TF_VAR_vmPassword: ${{ secrets.VMPASSWORD }}
+  TF_VAR_vmSize: ${{ vars.VMSIZE }}
+  TF_VAR_vmSizeGuac: ${{ vars.VMSIZEGUAC }}
+  TF_VAR_vmSizeAks: ${{ vars.VMSIZEAKS }}
+  TF_VAR_nodecount: ${{ github.event.inputs.nodeCount }}
+  TF_VAR_vmDisktype: ${{ vars.VMDISKTYPE }}
+  TF_VAR_vmSku: ${{ vars.VMSKU }}
+  TF_VAR_vmPublisher: ${{ vars.VMPUBLISHER }}
+  TF_VAR_vmOffer: ${{ vars.VMOFFER }}
+  TF_VAR_vmVersion: ${{ vars.VMVERSION }}
+  TF_VAR_vmLang: ${{ vars.VMLANG }}
+  TF_VAR_gal: ${{ vars.GAL }}
+  TF_VAR_vmGoldenImageName: ${{ vars.VMGOLDENIMAGENAME }}
+  TF_VAR_vmGoldenImageVersion: ${{ vars.VMGOLDENIMAGEVERSION }}
+  TF_VAR_rsgcommon: ${{ vars.RSGCOMMON }}
+
+jobs:
+  terraform-plan:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infrastructureAsCode
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Terraform init
+        run: |
+          terraform init \
+            -backend-config="key=${{ github.event.inputs.labName }}-components.tfstate" \
+            -backend-config="access_key=${{ secrets.STATE_BLOBACCESSKEY }}" \
+            -backend-config="storage_account_name=${{ secrets.STATE_SAACCOUNTNAME }}"
+        shell: bash
+        env:
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+
+      - name: Terraform plan
+        run: terraform plan
+        env:
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+
+  terraform-apply:
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infrastructureAsCode
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Terraform init
+        run: |
+          terraform init \
+            -backend-config="key=${{ github.event.inputs.labName }}-components.tfstate" \
+            -backend-config="access_key=${{ secrets.STATE_BLOBACCESSKEY }}" \
+            -backend-config="storage_account_name=${{ secrets.STATE_SAACCOUNTNAME }}"
+        shell: bash
+        env:
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+
+      - name: Terraform apply
+        run: terraform apply --auto-approve
+        env:
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+
+  deploy-tools:
+    needs: terraform-apply
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: configurationAsCode
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Terraform Apply
+        run: |
+          terraform -chdir=./components/ init \
+            -backend-config="key=${{ github.event.inputs.labName }}-components.tfstate" \
+            -backend-config="access_key=${{ secrets.STATE_BLOBACCESSKEY_CAC }}" \
+            -backend-config="storage_account_name=${{ secrets.STATE_SAACCOUNTNAME_CAC }}"
+          
+          terraform -chdir=./components/ apply -target=module.certManager --auto-approve ;
+          
+          if [ "$jenkinsNexus" == true ] ;
+          then
+            terraform -chdir=./components/ apply -target=module.jenkinsNexus --auto-approve ;
+          fi
+          
+          if [ "$keycloak" == true ] ;
+          then
+            terraform -chdir=./components/ apply -target=module.keycloak --auto-approve ;
+          fi
+          
+          if [ "$gitlab" == true ] ;
+          then
+            terraform -chdir=./components/ apply -target=module.gitlab --auto-approve ;
+          fi
+          
+          if [ "$argocd" == true ] ;
+          then
+            terraform -chdir=./components/ apply -target=module.argocd --auto-approve ;
+          fi
+        shell: bash
+        env:
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          JENKINSNEXUS: ${{ vars.JENKINSNEXUS }}
+          KEYCLOAK: ${{ vars.KEYCLOAK }}
+          GITLAB: ${{ vars.GITLAB }}
+          ARGOCD: ${{ vars.ARGOCD }}
+          TF_VAR_subscriptionId: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          TF_VAR_jenkinsVersion: ${{ vars.JENKINSVERSUIN }}
+          TF_VAR_nexusVersion: ${{ vars.NEXUSVERSION }}
+          TF_VAR_certManagerVersion: ${{ vars.CERTMANAGERVERSION }}
+          TF_VAR_nginxVersion: ${{ vars.NGINXVERSION }}
+          TF_VAR_gitlabVersion: ${{ vars.GITLABVERSION }}
+          TF_VAR_argocdVersion: ${{ vars.ARGOCDVERSION }}
+
+  provision:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: configurationAsCode
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: '${{ secrets.AZURE_CREDENTIALS }}'
+
+      - name: Provision Environment
+        run: |
+          set -x
+          blob="${TF_VAR_labname}inventory"
+          storageAccountName="${TF_VAR_labname}inventory"
+          az storage blob download --account-name ${storageAccountName} --container-name vminventoryfiles --name ${blob} --file inventory
+          ansible-playbook -v -i inventory -T 500 --extra-vars keyboard_language=${TF_VAR_vmLang} ./ldev-playbook.yml
+          az storage blob delete --account-name ${storageAccountName} --container-name vminventoryfiles --name ${blob}

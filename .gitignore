@@ -1,0 +1,29 @@
+provision/sharedFolder/sshImport/*
+configurationAsCode/sharedFolder/sshImport/
+.vagrant/
+hdd/*
+*.vdi
+*.retry
+*.tfstate*
+*.terraform
+id_rsa
+id_rsa.pub
+CF-for-K8S/local.sh 
+# OS generated files #
+######################
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IntelliJ IDEA
+/.idea/.gitignore
+/.idea/checkstyle-idea.xml
+/.idea/developer-security-training-infrastructure.iml
+/.idea/git_toolbox_prj.xml
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/vcs.xml

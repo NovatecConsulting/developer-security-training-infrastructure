@@ -1,0 +1,64 @@
+- name: set timezone to Europe/Berlin
+  timezone:
+   name: Europe/Berlin
+
+- name: remove us servers from mirror list
+  shell: sed -i 's/http:\/\/us./http:\/\//g' /etc/apt/sources.list
+  become: yes
+
+# NOTE: debian-specific ansible module, change if other OS is used
+- name: upgrade all installed packages
+  apt:
+   upgrade: dist
+
+# oracle java needs to accept its license agreement.
+# NOTE: debian-depent instruction, change if other OS is used
+- name: prepare to auto-accept oracle license
+  shell: echo oracle-java8-installer shared/accepted-oracle-license-v1-1 select true | sudo /usr/bin/debconf-set-selections
+
+- name: install packages
+  retries: 3
+  delay: 3
+  apt: 
+    name: ['tree', 'htop', 'vim', 'nano', 'git', 'zsh', 'jq', 'python3-jsonpatch', 'maven', 'ubuntu-make', 'ca-certificates', 'software-properties-common', 'python3-pip', 'gvfs-bin', 'wget', 'default-jdk','zlibc','libxslt-dev','libxml2-dev','gnupg2', 'pass']
+    state: latest
+    cache_valid_time: 3600 
+
+- name: install curl and ruby separated
+  apt:
+    name: ['curl','ruby'] 
+    state: present
+
+- name: Import Docker CE repository gpg key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+    id: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+
+- name: Add Docker CE repository
+  apt_repository:
+    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+
+- name: Install Docker CE
+  apt:
+    name: ['docker-ce','docker-compose']
+    state: present
+    update_cache: yes
+
+- name: add user to docker and sudo group
+  user:
+   name: "{{ devUser }}"
+   groups: docker,sudo
+   append: yes
+
+- name: define grub swap for docker
+  blockinfile:
+   dest: "/etc/default/grub"
+   insertafter: "desktop_shadow=#000000"
+   block: |
+    GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"
+
+- name: update grub for docker
+  shell: update-grub
+  become: yes

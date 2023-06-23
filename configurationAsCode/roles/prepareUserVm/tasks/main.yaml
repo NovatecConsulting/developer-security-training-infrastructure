@@ -1,0 +1,4 @@
+#user vm based includes:
+- include: copyExampleApp.yaml
+#reboot vms and test with health.sh script:
+- include: rebootVM.yaml

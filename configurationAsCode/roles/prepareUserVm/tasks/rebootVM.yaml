@@ -1,0 +1,12 @@
+- name: Reboot host and wait for it to restart
+  reboot:
+    msg: "Reboot initiated by Ansible"
+    connect_timeout: 5
+    reboot_timeout: 600
+    pre_reboot_delay: 0
+    post_reboot_delay: 60
+    test_command: whoami
+
+- name: Test the health of the VM / Cluster connection
+  shell: sleep 30 && /home/{{ devUser }}/.exa/health.sh
+  become_user: "{{devUser}}"

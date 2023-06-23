@@ -1,0 +1,12 @@
+- name: copy examples
+  copy:
+   src: "./sharedFolder/examples/"
+   dest: "/home/{{devUser}}/.exa"
+  
+- name: Changing perm of health script, adding "+x"
+  file:
+    owner: "{{devUser}}"  
+    group: "{{devUser}}"
+    dest: "/home/{{devUser}}/.exa/health.sh"
+    mode: "a+x"
+
